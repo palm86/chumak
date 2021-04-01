@@ -107,12 +107,23 @@ recv(#chumak_req{state=SocketState, pending_recv=PendingRecv}=State, From) ->
         {wait_more_msg, nil} ->
             {noreply, State#chumak_req{pending_recv=From}};
 
-        _ ->
+        otherwise ->
+            io:format("~p~n", [otherwise]),
             {reply, {error, efsm}, State}
     end.
 
-send_multipart(State, _Multipart, _From) ->
-    {reply, {error, not_implemented_yet}, State}.
+send_multipart(#chumak_req{lb=LB, state=ready}=State, Multipart, From) ->
+    case chumak_lb:get(LB) of
+        none ->
+            {reply, {error, no_connected_peers}, State};
+        {NewLB, PeerPid} ->
+            chumak_peer:send(PeerPid, [<<>>|Multipart], From),
+            {noreply, State#chumak_req{
+                        lb=NewLB,
+                        state=wait_reply,
+                        last_peer_sent=PeerPid
+                       }}
+    end.
 
 recv_multipart(State, _From) ->
     {reply, {error, not_implemented_yet}, State}.
